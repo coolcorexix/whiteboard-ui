@@ -33,7 +33,6 @@ export const Canvas: React.FC<CanvasProps> = ({ onDrag, transform, isDragging, m
     if (mode === 'add') {
       // Calculate the position in the canvas coordinate system
       const rect = e.currentTarget.getBoundingClientRect();
-      console.log("🚀 ~ handleClick ~ e.currentTarget:", e.currentTarget)
       const x = (e.clientX - rect.left) / transform.scale;
       const y = (e.clientY - rect.top) / transform.scale;
       
@@ -45,7 +44,6 @@ export const Canvas: React.FC<CanvasProps> = ({ onDrag, transform, isDragging, m
         height: 100,
         content: 'New Item'
       };
-      console.log("🚀 ~ handleClick ~ newItem:", newItem)
       setItems([...items, newItem]);
     }
   };
@@ -73,7 +71,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onDrag, transform, isDragging, m
             top: item.y,
             width: item.width,
             height: item.height,
-            backgroundColor: 'red',
+            backgroundColor: 'green',
             border: '1px solid #ccc',
             borderRadius: '4px',
             padding: '8px',

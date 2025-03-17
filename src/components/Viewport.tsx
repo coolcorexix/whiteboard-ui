@@ -23,10 +23,35 @@ export const Viewport: React.FC<ViewportProps> = ({ mode }) => {
     setTransform(prev => ({
       ...prev,
       x: prev.x + deltaX,
-      y: prev.y + deltaY,
-      scale: 1 // Keep scale fixed at 1
+      y: prev.y + deltaY
     }));
   }, []);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    
+    // Get mouse position relative to the viewport
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    setTransform(prev => {
+      const newScale = Math.max(0.1, Math.min(5, prev.scale * scaleFactor));
+      
+      // Calculate how much the content will change in size
+      const scaleChange = newScale - prev.scale;
+      
+      // Calculate the position change needed to keep the mouse point fixed
+      const dx = -(mouseX - prev.x) * (scaleChange / prev.scale);
+      const dy = -(mouseY - prev.y) * (scaleChange / prev.scale);
+
+      return {
+        x: prev.x + dx,
+        y: prev.y + dy,
+        scale: newScale
+      };
+    });
+  };
 
   return (
     <div
@@ -40,6 +65,7 @@ export const Viewport: React.FC<ViewportProps> = ({ mode }) => {
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onWheel={handleWheel}
     >
       <Canvas
         transform={transform}

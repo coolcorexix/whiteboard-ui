@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Viewport } from "./components/Viewport";
 import { CommandPalette } from "./components/CommandPalette";
+import { SimulationControls } from "./components/SimulationControls";
 import "./App.css";
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
     <div style={{ position: "relative" }}>
       <Viewport mode={mode} />
       <CommandPalette mode={mode} onModeChange={setMode} />
+      <SimulationControls />
     </div>
   );
 }

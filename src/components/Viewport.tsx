@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { Canvas } from './Canvas';
+import { Canvas, calculateCenteredTransform } from './Canvas';
 
 interface ViewportProps {
   mode: 'pan' | 'add';
 }
 
 export const Viewport: React.FC<ViewportProps> = ({ mode }) => {
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [transform, setTransform] = useState(() => calculateCenteredTransform(1));
   const [isDragging, setIsDragging] = useState(false);
 
   const handleMouseDown = () => {
@@ -53,6 +53,11 @@ export const Viewport: React.FC<ViewportProps> = ({ mode }) => {
     });
   };
 
+  // Function to reset view to center
+  const resetView = () => {
+    setTransform(calculateCenteredTransform(transform.scale));
+  };
+
   return (
     <div
       style={{
@@ -67,6 +72,11 @@ export const Viewport: React.FC<ViewportProps> = ({ mode }) => {
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
+      {/* Optional UI for resetting view */}
+      <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10 }}>
+        <button onClick={resetView}>Center View</button>
+      </div>
+      
       <Canvas
         transform={transform}
         onDrag={handleDrag}

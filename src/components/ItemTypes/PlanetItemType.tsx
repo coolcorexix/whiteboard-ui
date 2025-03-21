@@ -8,6 +8,7 @@ export interface PlanetData {
   radius: number;
   mass: number;  // Mass affects gravitational pull
   velocity?: { x: number; y: number }; // Optional initial velocity
+  isOrbital: boolean; // Whether this planet follows orbital rules
 }
 
 // Planet-specific item interface
@@ -30,14 +31,15 @@ const calculateMassFromRadius = (radius: number): number => {
 
 // Planet item type configuration
 export const PlanetItemType: ItemTypeConfig = {
-  defaultWidth: 100,
-  defaultHeight: 100,
+  defaultWidth: 60,
+  defaultHeight: 60,
   defaultData: {
-    name: 'New Planet',
+    name: 'Small Planet',
     color: getRandomColor(),
-    radius: 50,
-    mass: 500, // Default mass
-    velocity: { x: 0, y: 0 } // Start stationary
+    radius: 30,
+    mass: 100, // Smaller mass for satellites orbiting the central body
+    velocity: { x: 0, y: 0 }, // Initial velocity will be set in Canvas component
+    isOrbital: true // Default to orbital motion for new planets
   },
   render: (item: BaseItem) => {
     const planetItem = item as PlanetItem;
@@ -66,9 +68,16 @@ export const PlanetItemType: ItemTypeConfig = {
           textShadow: '0 0 5px rgba(0,0,0,0.5)'
         }}>
           {planetItem.data.name}
-          <div style={{ fontSize: '12px', opacity: 0.8 }}>
-            Mass: {planetItem.data.mass}
-          </div>
+          {planetItem.data.isOrbital && (
+            <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>
+              ⚫ Orbital
+            </span>
+          )}
+          {!planetItem.data.isOrbital && (
+            <span style={{ fontSize: '10px', display: 'block', opacity: 0.7 }}>
+              ⚫ Random
+            </span>
+          )}
         </div>
       </div>
     );

@@ -2,7 +2,15 @@ import React from 'react';
 import { useSimulationStore } from '../store/simulationStore';
 
 export const SimulationControls: React.FC = () => {
-  const { isPlaying, showForces, fps, togglePlaying, toggleShowForces } = useSimulationStore();
+  const { 
+    isPlaying, 
+    showForces, 
+    showOrbits,
+    fps, 
+    togglePlaying, 
+    toggleShowForces,
+    toggleShowOrbits
+  } = useSimulationStore();
 
   return (
     <div style={{ 
@@ -46,6 +54,21 @@ export const SimulationControls: React.FC = () => {
         }}
       >
         {showForces ? 'Hide Forces' : 'Show Forces'}
+      </button>
+
+      <button 
+        onClick={toggleShowOrbits}
+        style={{
+          background: showOrbits ? '#FF9800' : '#607D8B',
+          color: 'white',
+          border: 'none',
+          padding: '5px 10px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px'
+        }}
+      >
+        {showOrbits ? 'Hide Orbits' : 'Show Orbits'}
       </button>
 
       {/* FPS Monitor */}

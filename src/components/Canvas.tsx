@@ -1,6 +1,11 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { PlanetItemType } from './ItemTypes/PlanetItemType';
 import { useSimulationStore } from '../store/simulationStore';
+import ForceVisualization, { ForceVector, VelocityVector } from './ForceVisualization';
+import OrbitPathVisualization, { OrbitPath } from './OrbitPathVisualization';
+import PlanetLayer from './layers/PlanetLayer';
+import ForceLineLayer from './layers/ForceLineLayer';
+import CanvasBackground from './layers/CanvasBackground';
 
 // Base item interface that all item types will extend
 export interface BaseItem {
@@ -19,6 +24,12 @@ export interface ItemTypeConfig {
   defaultHeight: number;
   defaultData: any;
   render: (item: BaseItem) => React.ReactNode;
+}
+
+// Interface for orbit path points
+interface OrbitPoint {
+  x: number;
+  y: number;
 }
 
 interface CanvasProps {
@@ -61,13 +72,14 @@ export const Canvas: React.FC<CanvasProps> = ({
 }) => {
   const [items, setItems] = useState<BaseItem[]>([]);
   const [forceLines, setForceLines] = useState<{from: BaseItem, to: BaseItem, strength: number}[]>([]);
+  const [orbitPaths, setOrbitPaths] = useState<OrbitPath[]>([]);
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
   const isInitialized = useRef(false);
   const animationFrameId = useRef<number | null>(null);
   const lastUpdateTime = useRef<number>(Date.now());
   
   // Get simulation state from Zustand store
-  const { isPlaying, showForces, setFps, setIsPlaying, setShowForces } = useSimulationStore();
+  const { isPlaying, showForces, showOrbits, setFps, setIsPlaying, setShowForces } = useSimulationStore();
   const isSimulationRunning = useRef<boolean>(isPlaying);
   
   // Update the ref when isPlaying changes
@@ -142,7 +154,144 @@ export const Canvas: React.FC<CanvasProps> = ({
     setForceLines(newForceLines);
   }, [G, showForces]);
   
-  // Physics simulation for planetary motion
+  // Calculate orbit prediction for a single planet
+  const calculateOrbitPath = useCallback((planet: BaseItem, allPlanets: BaseItem[]) => {
+    if (planet.data.mass >= 5000) {
+      // Don't calculate orbits for very massive bodies (like the sun)
+      return [];
+    }
+    
+    // Create a deep copy of the planet to simulate its future positions
+    const simulatedPlanet = {
+      ...planet,
+      data: {
+        ...planet.data,
+        velocity: { ...planet.data.velocity }
+      }
+    };
+    
+    const orbitPoints: OrbitPoint[] = [];
+    
+    // Add the current position as the first point
+    orbitPoints.push({
+      x: planet.x + planet.width / 2,
+      y: planet.y + planet.height / 2
+    });
+    
+    // Use a fixed time step for simulation
+    const timeStep = 0.1; // in seconds
+    
+    // Simulate future positions (for up to 500 points or until we loop)
+    for (let i = 0; i < 500; i++) {
+      // Calculate forces on the simulated planet
+      let totalForceX = 0;
+      let totalForceY = 0;
+      
+      allPlanets.forEach(otherPlanet => {
+        if (otherPlanet.id === simulatedPlanet.id) return;
+        
+        // Get center positions
+        const planetX = simulatedPlanet.x + simulatedPlanet.width / 2;
+        const planetY = simulatedPlanet.y + simulatedPlanet.height / 2;
+        const otherX = otherPlanet.x + otherPlanet.width / 2;
+        const otherY = otherPlanet.y + otherPlanet.height / 2;
+        
+        // Calculate distance
+        const dx = otherX - planetX;
+        const dy = otherY - planetY;
+        const distanceSquared = dx * dx + dy * dy;
+        
+        // Avoid division by zero
+        if (distanceSquared < 100) return;
+        
+        // Calculate force
+        const distance = Math.sqrt(distanceSquared);
+        const force = G * simulatedPlanet.data.mass * otherPlanet.data.mass / distanceSquared;
+        
+        // Add force components
+        totalForceX += force * dx / distance;
+        totalForceY += force * dy / distance;
+      });
+      
+      // Calculate acceleration
+      const accelerationX = totalForceX / simulatedPlanet.data.mass;
+      const accelerationY = totalForceY / simulatedPlanet.data.mass;
+      
+      // Update velocity
+      simulatedPlanet.data.velocity.x += accelerationX * timeStep;
+      simulatedPlanet.data.velocity.y += accelerationY * timeStep;
+      
+      // Update position
+      simulatedPlanet.x += simulatedPlanet.data.velocity.x * timeStep;
+      simulatedPlanet.y += simulatedPlanet.data.velocity.y * timeStep;
+      
+      // Add the new position to our points array
+      const newPoint = {
+        x: simulatedPlanet.x + simulatedPlanet.width / 2,
+        y: simulatedPlanet.y + simulatedPlanet.height / 2
+      };
+      orbitPoints.push(newPoint);
+      
+      // Check if we've completed a full orbit
+      // We do this by seeing if we're close to the original position and heading in 
+      // roughly the same direction as when we started
+      if (i > 50) { // Only check after we've generated enough points
+        const startPoint = orbitPoints[0];
+        const distToStart = Math.sqrt(
+          Math.pow(newPoint.x - startPoint.x, 2) + 
+          Math.pow(newPoint.y - startPoint.y, 2)
+        );
+        
+        // If we're close to the starting point, consider the orbit complete
+        if (distToStart < planet.width) {
+          break;
+        }
+      }
+    }
+    
+    return orbitPoints;
+  }, [G]);
+  
+  // Calculate orbit paths for all planets
+  const calculateAllOrbitPaths = useCallback(() => {
+    if (!showOrbits) {
+      setOrbitPaths([]);
+      return;
+    }
+    
+    const planetItems = items.filter(item => item.type === 'planet');
+    const newOrbitPaths: OrbitPath[] = [];
+    
+    // Skip calculation if we only have one planet (no orbit)
+    if (planetItems.length <= 1) {
+      setOrbitPaths([]);
+      return;
+    }
+    
+    // Calculate orbit paths for each planet
+    planetItems.forEach(planet => {
+      const orbitPoints = calculateOrbitPath(planet, planetItems);
+      if (orbitPoints.length > 0) {
+        newOrbitPaths.push({
+          itemId: planet.id,
+          points: orbitPoints
+        });
+      }
+    });
+    
+    setOrbitPaths(newOrbitPaths);
+  }, [items, calculateOrbitPath, showOrbits]);
+  
+  // Calculate orbits when planets change or when showOrbits changes
+  useEffect(() => {
+    calculateAllOrbitPaths();
+  }, [items, calculateAllOrbitPaths, showOrbits]);
+  
+  // Replace the single force vector state with a more detailed structure
+  const [detailedForceVectors, setDetailedForceVectors] = useState<ForceVector[]>([]);
+  const [velocityVectors, setVelocityVectors] = useState<VelocityVector[]>([]);
+
+  // Update the updatePlanetPositions function to clear vectors before adding new ones
   const updatePlanetPositions = useCallback(() => {
     const currentTime = Date.now();
     const deltaTime = (currentTime - lastUpdateTime.current) / 1000; // Convert to seconds
@@ -156,11 +305,21 @@ export const Canvas: React.FC<CanvasProps> = ({
       lastFpsUpdate.current = currentTime;
     }
 
+    // Clear all vectors at each update to prevent accumulation
+    setDetailedForceVectors([]);
+    setVelocityVectors([]);
+
     // Only update if we have more than one item or simulation is running
     if (items.length <= 1 || !isSimulationRunning.current) {
       animationFrameId.current = requestAnimationFrame(updatePlanetPositions);
       return;
     }
+
+    // Store all individual force vectors between planets
+    const newDetailedForceVectors: ForceVector[] = [];
+
+    // Store velocity vectors for visualization
+    const newVelocityVectors: VelocityVector[] = [];
 
     setItems(prevItems => {
       const updatedItems = prevItems.map(item => {
@@ -170,6 +329,80 @@ export const Canvas: React.FC<CanvasProps> = ({
         const planet = { ...item };
         if (!planet.data.velocity) {
           planet.data.velocity = { x: 0, y: 0 };
+        }
+
+        // Skip the central body (assumed to be first planet)
+        if (planet.id === prevItems[0]?.id) {
+          // Still calculate velocity components for visualizing
+          if (prevItems.length > 1) {
+            // Assume the planet orbits around the central body
+            const centralPlanet = prevItems[0];
+            
+            // Calculate center points
+            const centralX = centralPlanet.x + centralPlanet.width / 2;
+            const centralY = centralPlanet.y + centralPlanet.height / 2;
+            const planetX = planet.x + planet.width / 2;
+            const planetY = planet.y + planet.height / 2;
+            
+            // Calculate velocity components
+            newVelocityVectors.push({
+              planetId: planet.id,
+              velocityX: planet.data.velocity.x,
+              velocityY: planet.data.velocity.y,
+              perpVelocityX: 0, // Central body doesn't have perpendicular component
+              perpVelocityY: 0,
+              radialVelocityX: 0, // Central body doesn't have radial component
+              radialVelocityY: 0
+            });
+          }
+          return planet;
+        }
+
+        // Calculate velocity components for non-central planets
+        if (prevItems.length > 1) {
+          // Assume the first planet is the central body
+          const centralPlanet = prevItems[0];
+          
+          // Calculate center points
+          const centralX = centralPlanet.x + centralPlanet.width / 2;
+          const centralY = centralPlanet.y + centralPlanet.height / 2;
+          const planetX = planet.x + planet.width / 2;
+          const planetY = planet.y + planet.height / 2;
+          
+          // Calculate vector from planet to central body (radial direction)
+          const dx = centralX - planetX;
+          const dy = centralY - planetY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // Normalize the radial vector
+          const normalizedDx = dx / distance;
+          const normalizedDy = dy / distance;
+          
+          // Calculate perpendicular vector (tangential direction)
+          const perpDx = -normalizedDy;
+          const perpDy = normalizedDx;
+          
+          // Decompose velocity into radial and perpendicular components
+          // Project velocity onto radial direction (dot product)
+          const radialVelocity = planet.data.velocity.x * normalizedDx + planet.data.velocity.y * normalizedDy;
+          const radialVelocityX = radialVelocity * normalizedDx;
+          const radialVelocityY = radialVelocity * normalizedDy;
+          
+          // Project velocity onto perpendicular direction (dot product)
+          const perpVelocity = planet.data.velocity.x * perpDx + planet.data.velocity.y * perpDy;
+          const perpVelocityX = perpVelocity * perpDx;
+          const perpVelocityY = perpVelocity * perpDy;
+          
+          // Store velocity components for visualization
+          newVelocityVectors.push({
+            planetId: planet.id,
+            velocityX: planet.data.velocity.x,
+            velocityY: planet.data.velocity.y,
+            perpVelocityX,
+            perpVelocityY,
+            radialVelocityX,
+            radialVelocityY
+          });
         }
 
         // Calculate gravitational forces from all other planets
@@ -192,8 +425,19 @@ export const Canvas: React.FC<CanvasProps> = ({
           
           // Calculate force components
           const distance = Math.sqrt(distanceSquared);
-          totalForceX += force * dx / distance;
-          totalForceY += force * dy / distance;
+          const forceX = force * dx / distance;
+          const forceY = force * dy / distance;
+          
+          // Store each individual force vector for visualization
+          newDetailedForceVectors.push({
+            targetPlanetId: planet.id,
+            sourcePlanetId: otherItem.id,
+            forceX: forceX,
+            forceY: forceY
+          });
+          
+          totalForceX += forceX;
+          totalForceY += forceY;
         });
 
         // Calculate acceleration (F = ma, so a = F/m)
@@ -214,9 +458,15 @@ export const Canvas: React.FC<CanvasProps> = ({
       // Calculate new force lines for visualization
       calculateForceLines(updatedItems);
 
+      // After all calculations are done, update detailed force and velocity vectors
+      setTimeout(() => {
+        setDetailedForceVectors(newDetailedForceVectors);
+        setVelocityVectors(newVelocityVectors);
+      }, 0);
+
       return updatedItems;
     });
-
+    
     // Continue animation loop
     animationFrameId.current = requestAnimationFrame(updatePlanetPositions);
   }, [items.length, G, calculateForceLines, setFps]);
@@ -238,22 +488,23 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Add a demo planet (Earth) when component loads if there are no items
   useEffect(() => {
     if (items.length === 0) {
-      const earthPlanet: BaseItem = {
+      const centralBody: BaseItem = {
         id: 'planet-' + Date.now().toString(),
-        x: CANVAS_CENTER_X - 60, // Subtract half the width to truly center
-        y: CANVAS_CENTER_Y - 60, // Subtract half the height to truly center
-        width: 120,
-        height: 120,
+        x: CANVAS_CENTER_X - 75, // Subtract half the width to truly center
+        y: CANVAS_CENTER_Y - 75, // Subtract half the height to truly center
+        width: 150,
+        height: 150,
         type: 'planet',
         data: {
-          name: 'Biggest Planet',
-          color: '#1E88E5', // Blue color for Earth
-          radius: 60,
-          mass: 5000, // Earth has significant mass
-          velocity: { x: 0, y: 0 } // Stationary at first
+          name: 'Sun',
+          color: '#FFA500', // Orange color for the Sun
+          radius: 75,
+          mass: 10000, // Much higher mass for the central body
+          velocity: { x: 0, y: 0 }, // Central body stays stationary
+          isOrbital: true
         }
       };
-      setItems([earthPlanet]);
+      setItems([centralBody]);
     }
   }, [items.length]);
 
@@ -266,7 +517,87 @@ export const Canvas: React.FC<CanvasProps> = ({
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 
+  // Create a function to toggle a planet's orbit mode
+  const togglePlanetOrbitalMode = useCallback((planetId: string) => {
+    setItems(prevItems => {
+      return prevItems.map(item => {
+        if (item.id === planetId && item.type === 'planet') {
+          // Toggle the isOrbital flag
+          const updatedItem = {
+            ...item,
+            data: {
+              ...item.data,
+              isOrbital: !item.data.isOrbital
+            }
+          };
+
+          // Recalculate velocity based on new orbital mode
+          if (updatedItem.data.isOrbital && prevItems.length > 1) {
+            // Assume the first planet is the central body (like the Sun)
+            const centralPlanet = prevItems[0];
+            
+            // Calculate center points of both planets
+            const centralX = centralPlanet.x + centralPlanet.width / 2;
+            const centralY = centralPlanet.y + centralPlanet.height / 2;
+            const planetX = updatedItem.x + updatedItem.width / 2;
+            const planetY = updatedItem.y + updatedItem.height / 2;
+            
+            // Calculate vector from planet to central planet
+            const dx = centralX - planetX;
+            const dy = centralY - planetY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Normalize the vector
+            const normalizedDx = dx / distance;
+            const normalizedDy = dy / distance;
+            
+            // Calculate perpendicular vector (tangential direction)
+            const perpDx = -normalizedDy;
+            const perpDy = normalizedDx;
+            
+            // Calculate orbital velocity magnitude using v = sqrt(G*M/r)
+            const velocityMagnitude = Math.sqrt(G * centralPlanet.data.mass / distance) * 0.5;
+            
+            // Apply the velocity in the perpendicular (tangential) direction
+            updatedItem.data.velocity = {
+              x: perpDx * velocityMagnitude,
+              y: perpDy * velocityMagnitude
+            };
+          } else if (!updatedItem.data.isOrbital) {
+            // If changing to random motion, give random velocity
+            updatedItem.data.velocity = { 
+              x: (Math.random() - 0.5) * 20, 
+              y: (Math.random() - 0.5) * 20 
+            };
+          }
+          
+          return updatedItem;
+        }
+        return item;
+      });
+    });
+  }, [G]);
+
+  // Add new state for the selected planet and popover
+  const [selectedPlanetId, setSelectedPlanetId] = useState<string | null>(null);
+
+  // Add a function to handle planet clicks
+  const handlePlanetClick = useCallback((e: React.MouseEvent, planetId: string) => {
+    e.stopPropagation(); // Prevent canvas click from triggering
+    setSelectedPlanetId(prevId => prevId === planetId ? null : planetId); // Toggle selection
+  }, []);
+
+  // Add a function to close popover when clicking outside
+  const handleCanvasClick = useCallback(() => {
+    setSelectedPlanetId(null);
+  }, []);
+
+  // Modify the original handleClick function to include the canvas click handler
   const handleClick = (e: React.MouseEvent) => {
+    // Close any open popover when clicking on the canvas
+    handleCanvasClick();
+
+    // Original add item logic
     if (mode === 'add' && selectedItemType && mergedItemTypes[selectedItemType]) {
       // Calculate the position in the canvas coordinate system
       const rect = e.currentTarget.getBoundingClientRect();
@@ -288,13 +619,53 @@ export const Canvas: React.FC<CanvasProps> = ({
         type: selectedItemType,
         data: { 
           ...itemType.defaultData,
-          // Give smaller planets some initial velocity for interesting orbits
-          velocity: { 
-            x: (Math.random() - 0.5) * 20, 
-            y: (Math.random() - 0.5) * 20 
-          }
+          velocity: { x: 0, y: 0 }, // Initialize with zero velocity
+          isOrbital: true
         }
       };
+
+      // Only calculate orbital velocity if we have at least one planet and this planet is set to orbital mode
+      if (newItem.data.isOrbital && items.length > 0) {
+        // Assume the first planet is the central body (like the Sun)
+        const centralPlanet = items[0];
+        
+        // Calculate center points of both planets
+        const centralX = centralPlanet.x + centralPlanet.width / 2;
+        const centralY = centralPlanet.y + centralPlanet.height / 2;
+        const newPlanetX = newItem.x + newItem.width / 2;
+        const newPlanetY = newItem.y + newItem.height / 2;
+        
+        // Calculate vector from new planet to central planet
+        const dx = centralX - newPlanetX;
+        const dy = centralY - newPlanetY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Normalize the vector
+        const normalizedDx = dx / distance;
+        const normalizedDy = dy / distance;
+        
+        // Calculate perpendicular vector (tangential direction)
+        // This is the key step: creating a vector that is exactly perpendicular 
+        // to the radius vector by swapping components and negating one
+        const perpDx = -normalizedDy;
+        const perpDy = normalizedDx;
+        
+        // Calculate orbital velocity magnitude using v = sqrt(G*M/r)
+        const velocityMagnitude = Math.sqrt(G * centralPlanet.data.mass / distance) * 0.5;
+        
+        // Apply the velocity in the perpendicular (tangential) direction
+        newItem.data.velocity = {
+          x: perpDx * velocityMagnitude,
+          y: perpDy * velocityMagnitude
+        };
+      } else if (!newItem.data.isOrbital) {
+        // If not in orbital mode, give random velocity as before
+        newItem.data.velocity = { 
+          x: (Math.random() - 0.5) * 20, 
+          y: (Math.random() - 0.5) * 20 
+        };
+      }
+      
       setItems([...items, newItem]);
     }
   };
@@ -357,98 +728,53 @@ export const Canvas: React.FC<CanvasProps> = ({
         height: `${CANVAS_HEIGHT}px`,
         transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
         transformOrigin: '0 0',
-        backgroundColor: '#0a0a18', // Dark blue background like space
-        backgroundImage: 'radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 7px)', 
-        backgroundSize: '100px 100px', // Stars in background
-        cursor: isDragging ? 'grabbing' : mode === 'add' ? 'crosshair' : 'default'
       }}
-      onMouseMove={handleMouseMove}
-      onClick={handleClick}
     >
-      {/* Gravity field visualization (commented out because it's very performance intensive) */}
-      {/* Uncomment this if you want to see a color visualization of the gravity field 
-      {showForces && items.length > 0 && Array.from({ length: 50 }).map((_, i) => (
-        <div key={`field-row-${i}`} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', display: 'flex' }}>
-          {Array.from({ length: 50 }).map((_, j) => {
-            const x = j * (CANVAS_WIDTH / 50);
-            const y = i * (CANVAS_HEIGHT / 50);
-            return (
-              <div 
-                key={`field-${i}-${j}`} 
-                style={{
-                  width: `${CANVAS_WIDTH / 50}px`,
-                  height: `${CANVAS_HEIGHT / 50}px`,
-                  backgroundColor: getGravityFieldColor(x, y)
-                }}
-              />
-            );
-          })}
-        </div>
-      ))} */}
+      {/* Background Layer */}
+      <CanvasBackground 
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        onClick={handleClick}
+        onMouseMove={handleMouseMove}
+        cursor={isDragging ? 'grabbing' : mode === 'add' ? 'crosshair' : 'default'}
+      />
+      
+      {/* Orbit Path Layer (z-index: 10) */}
+      <OrbitPathVisualization
+        canvasWidth={CANVAS_WIDTH}
+        canvasHeight={CANVAS_HEIGHT}
+        items={items}
+        orbitPaths={orbitPaths}
+        showOrbits={showOrbits}
+      />
+      
+      {/* Force Line Layer (z-index: 20) */}
+      <ForceLineLayer
+        canvasWidth={CANVAS_WIDTH}
+        canvasHeight={CANVAS_HEIGHT}
+        forceLines={forceLines}
+        showForces={showForces}
+      />
 
-      {/* Force line visualization */}
-      {showForces && forceLines.map((line, index) => {
-        const startX = line.from.x + line.from.width/2;
-        const startY = line.from.y + line.from.height/2;
-        const endX = line.to.x + line.to.width/2;
-        const endY = line.to.y + line.to.height/2;
-        
-        // Calculate distance for line segment
-        const dx = endX - startX;
-        const dy = endY - startY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Create normalized vector for direction
-        const nx = dx / distance;
-        const ny = dy / distance;
-        
-        // Adjust start and end positions to be on the edge of planets, not center
-        const radius1 = line.from.data.radius;
-        const radius2 = line.to.data.radius;
-        
-        const adjustedStartX = startX + nx * radius1;
-        const adjustedStartY = startY + ny * radius1;
-        const adjustedEndX = endX - nx * radius2;
-        const adjustedEndY = endY - ny * radius2;
-        
-        return (
-          <svg key={`force-${index}`} style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: `${CANVAS_WIDTH}px`,
-            height: `${CANVAS_HEIGHT}px`,
-            pointerEvents: 'none'
-          }}>
-            <line
-              x1={adjustedStartX}
-              y1={adjustedStartY}
-              x2={adjustedEndX}
-              y2={adjustedEndY}
-              stroke={`rgba(255, 255, 255, ${line.strength})`}
-              strokeWidth={line.strength * 5}
-            />
-          </svg>
-        );
-      })}
+      {/* Force Vector Layer (z-index: 101-102) */}
+      <ForceVisualization
+        canvasWidth={CANVAS_WIDTH}
+        canvasHeight={CANVAS_HEIGHT}
+        items={items}
+        detailedForceVectors={detailedForceVectors}
+        velocityVectors={velocityVectors}
+        showForces={showForces}
+      />
 
-      {/* Planet items */}
-      {items.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            position: 'absolute',
-            left: item.x,
-            top: item.y,
-            width: item.width,
-            height: item.height,
-            borderRadius: '4px',
-          }}
-        >
-          {mergedItemTypes[item.type] ? 
-            mergedItemTypes[item.type].render(item) : null}
-        </div>
-      ))}
+      {/* Planet Layer (z-index varies, content is interactive) */}
+      <PlanetLayer
+        items={items}
+        mergedItemTypes={mergedItemTypes}
+        selectedPlanetId={selectedPlanetId}
+        setSelectedPlanetId={setSelectedPlanetId}
+        togglePlanetOrbitalMode={togglePlanetOrbitalMode}
+        handlePlanetClick={handlePlanetClick}
+      />
     </div>
   );
 }; 

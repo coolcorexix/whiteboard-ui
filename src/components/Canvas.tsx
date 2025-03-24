@@ -1,12 +1,13 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { PlanetItemType } from './ItemTypes/PlanetItemType';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSimulationStore } from '../store/simulationStore';
-import ForceVisualization, { ForceVector, VelocityVector } from './ForceVisualization';
-import OrbitPathVisualization, { OrbitPath } from './OrbitPathVisualization';
-import PlanetLayer from './layers/PlanetLayer';
-import ForceLineLayer from './layers/ForceLineLayer';
-import CanvasBackground from './layers/CanvasBackground';
 import { calculateOrbitPath } from './calculateOrbitPath';
+import ForceVisualization, { ForceVector, VelocityVector } from './ForceVisualization';
+import { PlanetItemType } from './ItemTypes/PlanetItemType';
+import CanvasBackground from './layers/CanvasBackground';
+import ForceLineLayer from './layers/ForceLineLayer';
+import PlanetLayer from './layers/PlanetLayer';
+import OrbitLogger from './OrbitLogger';
+import OrbitPathVisualization, { OrbitPath } from './OrbitPathVisualization';
 
 // Base item interface that all item types will extend
 export interface BaseItem {
@@ -89,6 +90,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     isPlaying,
     showForces,
     showOrbits,
+    showTrails,
     fps,
     planetaryForces,
     timeScale,
@@ -734,6 +736,15 @@ export const Canvas: React.FC<CanvasProps> = ({
         items={items}
         orbitPaths={orbitPaths}
         showOrbits={showOrbits}
+      />
+
+
+      {/* Orbit Logger Layer (z-index: 10) */}
+      <OrbitLogger
+        items={items}
+        isPlaying={isPlaying}
+        maxPointsPerOrbit={100}
+        loggingFrequency={500}
       />
       
       {/* Force Line Layer (z-index: 20) */}

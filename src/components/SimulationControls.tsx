@@ -11,12 +11,14 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({ onCenter
     isPlaying, 
     showForces, 
     showOrbits,
+    showTrails,
     planetaryForces,
     timeScale,
     fps, 
     togglePlaying, 
     toggleShowForces,
     toggleShowOrbits,
+    toggleShowTrails,
     togglePlanetaryForces,
     setTimeScale
   } = useSimulationStore();
@@ -78,6 +80,21 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({ onCenter
         }}
       >
         {showOrbits ? 'Hide Orbits' : 'Show Orbits'}
+      </button>
+
+      <button 
+        onClick={toggleShowTrails}
+        style={{
+          background: showTrails ? '#8BC34A' : '#607D8B',
+          color: 'white',
+          border: 'none',
+          padding: '5px 10px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px'
+        }}
+      >
+        {showTrails ? 'Hide Trails' : 'Show Trails'}
       </button>
 
       <button 

@@ -1,6 +1,8 @@
 import React from 'react';
 import { BaseItem } from './Canvas';
+import { useSimulationStore } from '../store/simulationStore';
 
+// Define and export the interfaces
 export interface ForceVector {
   targetPlanetId: string;
   sourcePlanetId: string;
@@ -35,210 +37,149 @@ const ForceVisualization: React.FC<ForceVisualizationProps> = ({
   velocityVectors,
   showForces
 }) => {
+  const { planetaryForces } = useSimulationStore();
+
   if (!showForces) return null;
 
   return (
     <>
-      {/* Detailed Force Vector Visualization - Show individual forces from each planet */}
+      {/* Detailed force vectors between planets */}
       {detailedForceVectors.map((vector, index) => {
-        const targetPlanet = items.find(item => item.id === vector.targetPlanetId);
+        // Find source and target planets
         const sourcePlanet = items.find(item => item.id === vector.sourcePlanetId);
+        const targetPlanet = items.find(item => item.id === vector.targetPlanetId);
         
-        if (!targetPlanet || !sourcePlanet || 
-            targetPlanet.type !== 'planet' || 
-            sourcePlanet.type !== 'planet') return null;
+        if (!sourcePlanet || !targetPlanet) return null;
         
-        const centerX = targetPlanet.x + targetPlanet.width / 2;
-        const centerY = targetPlanet.y + targetPlanet.height / 2;
+        // Get center positions
+        const sourceX = sourcePlanet.x + sourcePlanet.width / 2;
+        const sourceY = sourcePlanet.y + sourcePlanet.height / 2;
+        const targetX = targetPlanet.x + targetPlanet.width / 2;
+        const targetY = targetPlanet.y + targetPlanet.height / 2;
         
-        // Calculate the magnitude of this specific force
+        // Calculate force magnitude for scaling
         const forceMagnitude = Math.sqrt(vector.forceX * vector.forceX + vector.forceY * vector.forceY);
+        const scale = 200; // Scale factor for visualization
         
-        // Skip if force is too small
-        if (forceMagnitude < 0.01) return null;
+        // Calculate normalized force components
+        const normalizedForceX = vector.forceX / forceMagnitude;
+        const normalizedForceY = vector.forceY / forceMagnitude;
         
-        // Normalize the vector to a visible length, log scale looks better for widely varying magnitudes
-        const scale = Math.min(80, 15 * Math.log(forceMagnitude + 1));
-        const normX = (vector.forceX / forceMagnitude) * scale;
-        const normY = (vector.forceY / forceMagnitude) * scale;
+        // Calculate scaled force components
+        const scaledForceX = normalizedForceX * scale;
+        const scaledForceY = normalizedForceY * scale;
         
-        // Calculate endpoint of the vector
-        const endX = centerX + normX;
-        const endY = centerY + normY;
+        // Define force line color based on source planet's role and planetaryForces setting
+        const isCentralSource = items[0]?.id === sourcePlanet.id;
+        const forceColor = isCentralSource ? 'rgba(255, 165, 0, 0.7)' : // Orange for Sun
+                            planetaryForces ? 'rgba(100, 149, 237, 0.7)' : // Blue for planet-planet forces
+                            'rgba(70, 70, 70, 0.3)'; // Gray and faded for disabled planet-planet forces
 
-        // Use source planet's color for the vector with different opacity
-        const vectorColor = sourcePlanet.data.color || '#FFFFFF';
+        // Skip rendering planet-planet forces if they're disabled
+        if (!planetaryForces && !isCentralSource) {
+          return null;
+        }
         
-        // Draw the arrow
+        // Adjust display for disabled planet-planet forces
+        const lineWidth = isCentralSource || planetaryForces ? 2 : 1;
+        const dashArray = !planetaryForces && !isCentralSource ? "5,5" : "none";
+        
         return (
-          <svg key={`vector-${vector.targetPlanetId}-${vector.sourcePlanetId}`} style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: `${canvasWidth}px`,
-            height: `${canvasHeight}px`,
-            pointerEvents: 'none',
-            zIndex: 101
-          }}>
-            {/* Main force vector line */}
-            <line
-              x1={centerX}
-              y1={centerY}
-              x2={endX}
-              y2={endY}
-              stroke={vectorColor}
-              strokeWidth={1.5}
-              strokeOpacity={0.7}
+          <svg 
+            key={`force-${index}`} 
+            style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              width: canvasWidth, 
+              height: canvasHeight, 
+              pointerEvents: 'none',
+              zIndex: 10
+            }}
+          >
+            {/* Draw the force vector from the source to the target planet */}
+            <line 
+              x1={sourceX} 
+              y1={sourceY} 
+              x2={targetX} 
+              y2={targetY} 
+              stroke={forceColor}
+              strokeWidth={lineWidth}
+              strokeDasharray={dashArray}
             />
-            
-            {/* Arrowhead */}
+            {/* Add arrowhead pointing toward the target planet */}
             <polygon 
-              points={`
-                ${endX},${endY}
-                ${endX - normX * 0.1 - normY * 0.05},${endY - normY * 0.1 + normX * 0.05}
-                ${endX - normX * 0.1 + normY * 0.05},${endY - normY * 0.1 - normX * 0.05}
-              `}
-              fill={vectorColor}
-              fillOpacity={0.7}
-            />
-            
-            {/* Small dot indicating the source planet */}
-            <circle
-              cx={endX}
-              cy={endY}
-              r={3}
-              fill={vectorColor}
-              fillOpacity={0.9}
+              points={`${targetX},${targetY} 
+                      ${targetX - normalizedForceX * 10 - normalizedForceY * 5},${targetY - normalizedForceY * 10 + normalizedForceX * 5} 
+                      ${targetX - normalizedForceX * 10 + normalizedForceY * 5},${targetY - normalizedForceY * 10 - normalizedForceX * 5}`} 
+              fill={forceColor} 
             />
           </svg>
         );
       })}
-
-      {/* Velocity Vector Visualization - Shows how velocity is decomposed */}
-      {velocityVectors.map((vector) => {
+      
+      {/* Velocity vectors */}
+      {velocityVectors.map((vector, index) => {
         const planet = items.find(item => item.id === vector.planetId);
-        if (!planet || planet.type !== 'planet') return null;
+        if (!planet) return null;
         
-        const centerX = planet.x + planet.width / 2;
-        const centerY = planet.y + planet.height / 2;
+        const planetX = planet.x + planet.width / 2;
+        const planetY = planet.y + planet.height / 2;
         
-        // Skip central body (no interesting velocity components)
-        if (planet.id === items[0]?.id) return null;
+        const velocityScale = 5; // Scale factor for velocity visualization
         
-        // Calculate magnitude of velocity for scaling
-        const velocityMagnitude = Math.sqrt(
-          vector.velocityX * vector.velocityX + 
-          vector.velocityY * vector.velocityY
-        );
+        // Calculate endpoints for each vector
+        const totalEndX = planetX + vector.velocityX * velocityScale;
+        const totalEndY = planetY + vector.velocityY * velocityScale;
         
-        // Skip if velocity is too small
-        if (velocityMagnitude < 0.01) return null;
+        const radialEndX = planetX + vector.radialVelocityX * velocityScale;
+        const radialEndY = planetY + vector.radialVelocityY * velocityScale;
         
-        // Scale factor for visualization
-        const scale = 5;
-        
-        // Calculate endpoints
-        const totalEndX = centerX + vector.velocityX * scale;
-        const totalEndY = centerY + vector.velocityY * scale;
-        const radialEndX = centerX + vector.radialVelocityX * scale;
-        const radialEndY = centerY + vector.radialVelocityY * scale;
-        const perpEndX = centerX + vector.perpVelocityX * scale;
-        const perpEndY = centerY + vector.perpVelocityY * scale;
+        const perpEndX = planetX + vector.perpVelocityX * velocityScale;
+        const perpEndY = planetY + vector.perpVelocityY * velocityScale;
         
         return (
-          <svg key={`velocity-${vector.planetId}`} style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: `${canvasWidth}px`,
-            height: `${canvasHeight}px`,
-            pointerEvents: 'none',
-            zIndex: 102
-          }}>
-            {/* Total velocity vector - white */}
-            <line
-              x1={centerX}
-              y1={centerY}
-              x2={totalEndX}
-              y2={totalEndY}
-              stroke="white"
-              strokeWidth={2}
-              strokeOpacity={0.8}
-            />
-            <polygon 
-              points={`
-                ${totalEndX},${totalEndY}
-                ${totalEndX - vector.velocityX * 0.1 * scale - vector.velocityY * 0.05 * scale},
-                ${totalEndY - vector.velocityY * 0.1 * scale + vector.velocityX * 0.05 * scale}
-                ${totalEndX - vector.velocityX * 0.1 * scale + vector.velocityY * 0.05 * scale},
-                ${totalEndY - vector.velocityY * 0.1 * scale - vector.velocityX * 0.05 * scale}
-              `}
-              fill="white"
-              fillOpacity={0.8}
+          <svg 
+            key={`velocity-${index}`} 
+            style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              width: canvasWidth, 
+              height: canvasHeight, 
+              pointerEvents: 'none',
+              zIndex: 20
+            }}
+          >
+            {/* Total velocity vector */}
+            <line 
+              x1={planetX} 
+              y1={planetY} 
+              x2={totalEndX} 
+              y2={totalEndY} 
+              stroke="rgba(255, 255, 255, 0.7)" 
+              strokeWidth={2} 
             />
             
-            {/* Radial velocity component - red */}
-            <line
-              x1={centerX}
-              y1={centerY}
-              x2={radialEndX}
-              y2={radialEndY}
-              stroke="red"
-              strokeWidth={1.5}
-              strokeOpacity={0.7}
-              strokeDasharray="5,3"
+            {/* Radial velocity component */}
+            <line 
+              x1={planetX} 
+              y1={planetY} 
+              x2={radialEndX} 
+              y2={radialEndY} 
+              stroke="rgba(255, 0, 0, 0.7)" 
+              strokeWidth={1.5} 
             />
             
-            {/* Perpendicular velocity component - green (this is what creates the orbit) */}
-            <line
-              x1={centerX}
-              y1={centerY}
-              x2={perpEndX}
-              y2={perpEndY}
-              stroke="#00FF00"
-              strokeWidth={1.5}
-              strokeOpacity={0.9}
+            {/* Perpendicular velocity component */}
+            <line 
+              x1={planetX} 
+              y1={planetY} 
+              x2={perpEndX} 
+              y2={perpEndY} 
+              stroke="rgba(0, 255, 0, 0.7)" 
+              strokeWidth={1.5} 
             />
-            <polygon 
-              points={`
-                ${perpEndX},${perpEndY}
-                ${perpEndX - vector.perpVelocityX * 0.1 * scale - vector.perpVelocityY * 0.05 * scale},
-                ${perpEndY - vector.perpVelocityY * 0.1 * scale + vector.perpVelocityX * 0.05 * scale}
-                ${perpEndX - vector.perpVelocityX * 0.1 * scale + vector.perpVelocityY * 0.05 * scale},
-                ${perpEndY - vector.perpVelocityY * 0.1 * scale - vector.perpVelocityX * 0.05 * scale}
-              `}
-              fill="#00FF00"
-              fillOpacity={0.9}
-            />
-            
-            {/* Small legend */}
-            <text
-              x={totalEndX + 10}
-              y={totalEndY}
-              fill="white"
-              fontSize="12"
-              style={{ pointerEvents: 'none' }}
-            >
-              Total Velocity
-            </text>
-            <text
-              x={perpEndX + 10}
-              y={perpEndY}
-              fill="#00FF00"
-              fontSize="12"
-              style={{ pointerEvents: 'none' }}
-            >
-              Orbital Component
-            </text>
-            <text
-              x={radialEndX + 10}
-              y={radialEndY}
-              fill="red"
-              fontSize="12"
-              style={{ pointerEvents: 'none' }}
-            >
-              Radial Component
-            </text>
           </svg>
         );
       })}

@@ -1,15 +1,24 @@
 import React from 'react';
 import { useSimulationStore } from '../store/simulationStore';
+import { calculateCenteredTransform } from './Canvas';
 
-export const SimulationControls: React.FC = () => {
+interface SimulationControlsProps {
+  onCenterView?: () => void;
+}
+
+export const SimulationControls: React.FC<SimulationControlsProps> = ({ onCenterView }) => {
   const { 
     isPlaying, 
     showForces, 
     showOrbits,
+    planetaryForces,
+    timeScale,
     fps, 
     togglePlaying, 
     toggleShowForces,
-    toggleShowOrbits
+    toggleShowOrbits,
+    togglePlanetaryForces,
+    setTimeScale
   } = useSimulationStore();
 
   return (
@@ -69,6 +78,110 @@ export const SimulationControls: React.FC = () => {
         }}
       >
         {showOrbits ? 'Hide Orbits' : 'Show Orbits'}
+      </button>
+
+      <button 
+        onClick={togglePlanetaryForces}
+        style={{
+          background: planetaryForces ? '#9C27B0' : '#607D8B',
+          color: 'white',
+          border: 'none',
+          padding: '5px 10px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px'
+        }}
+      >
+        {planetaryForces ? 'Disable P-P Forces' : 'Enable P-P Forces'}
+      </button>
+      
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        <span style={{ color: 'white', fontSize: '14px' }}>Speed:</span>
+        <button
+          onClick={() => setTimeScale(0.25)}
+          style={{
+            background: timeScale === 0.25 ? '#9C27B0' : '#607D8B',
+            color: 'white',
+            border: 'none',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          0.25x
+        </button>
+        <button
+          onClick={() => setTimeScale(0.5)}
+          style={{
+            background: timeScale === 0.5 ? '#9C27B0' : '#607D8B',
+            color: 'white',
+            border: 'none',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          0.5x
+        </button>
+        <button
+          onClick={() => setTimeScale(1)}
+          style={{
+            background: timeScale === 1 ? '#9C27B0' : '#607D8B',
+            color: 'white',
+            border: 'none',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          1x
+        </button>
+        <button
+          onClick={() => setTimeScale(2)}
+          style={{
+            background: timeScale === 2 ? '#9C27B0' : '#607D8B',
+            color: 'white',
+            border: 'none',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          2x
+        </button>
+        <button
+          onClick={() => setTimeScale(4)}
+          style={{
+            background: timeScale === 4 ? '#9C27B0' : '#607D8B',
+            color: 'white',
+            border: 'none',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px'
+          }}
+        >
+          4x
+        </button>
+      </div>
+
+      <button 
+        onClick={onCenterView}
+        style={{
+          background: '#2196F3',
+          color: 'white',
+          border: 'none',
+          padding: '5px 10px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px'
+        }}
+      >
+        Center View
       </button>
 
       {/* FPS Monitor */}

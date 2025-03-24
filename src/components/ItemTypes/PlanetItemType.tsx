@@ -37,7 +37,7 @@ export const PlanetItemType: ItemTypeConfig = {
     name: 'Small Planet',
     color: getRandomColor(),
     radius: 30,
-    mass: 100, // Smaller mass for satellites orbiting the central body
+    mass: 1, // Smaller mass for satellites orbiting the central body
     velocity: { x: 0, y: 0 }, // Initial velocity will be set in Canvas component
     isOrbital: true // Default to orbital motion for new planets
   },

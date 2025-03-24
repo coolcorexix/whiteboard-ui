@@ -5,6 +5,9 @@ interface CanvasBackgroundProps {
   height: number;
   onClick: (e: React.MouseEvent) => void;
   onMouseMove: (e: React.MouseEvent) => void;
+  onMouseDown?: (e: React.MouseEvent) => void;
+  onMouseUp?: (e: React.MouseEvent) => void;
+  onWheel?: (e: React.WheelEvent) => void;
   cursor: string;
   style?: React.CSSProperties;
 }
@@ -14,6 +17,9 @@ const CanvasBackground: React.FC<CanvasBackgroundProps> = ({
   height,
   onClick,
   onMouseMove,
+  onMouseDown,
+  onMouseUp,
+  onWheel,
   cursor,
   style = {}
 }) => {
@@ -32,6 +38,9 @@ const CanvasBackground: React.FC<CanvasBackgroundProps> = ({
       }}
       onClick={onClick}
       onMouseMove={onMouseMove}
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
+      onWheel={onWheel}
     />
   );
 };

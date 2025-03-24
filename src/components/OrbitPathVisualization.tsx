@@ -7,8 +7,9 @@ export interface OrbitPoint {
 }
 
 export interface OrbitPath {
-  itemId: string;
+  planetId: string;
   points: OrbitPoint[];
+  color: string;
 }
 
 interface OrbitPathVisualizationProps {
@@ -32,7 +33,7 @@ const OrbitPathVisualization: React.FC<OrbitPathVisualizationProps> = ({
     <>
       {orbitPaths.map((path) => {
         // Find the corresponding planet to get its color
-        const planet = items.find(item => item.id === path.itemId);
+        const planet = items.find(item => item.id === path.planetId);
         if (!planet) return null;
         
         // Create an SVG path from the orbit points
@@ -48,7 +49,7 @@ const OrbitPathVisualization: React.FC<OrbitPathVisualizationProps> = ({
         }, '');
         
         return (
-          <svg key={`orbit-${path.itemId}`} style={{
+          <svg key={`orbit-${path.planetId}`} style={{
             position: 'absolute',
             left: 0,
             top: 0,
